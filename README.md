@@ -1,8 +1,11 @@
 import numpy as np
 
 import pandas as pd
+
 from tensorflow.keras.models import Sequential
+
 from tensorflow.keras.layers import LSTM, Dense
+
 from sklearn.preprocessing import MinMaxScaler
 
 data = {'date': pd.date_range(start='2022-01-01', periods=100),
@@ -11,14 +14,20 @@ data = {'date': pd.date_range(start='2022-01-01', periods=100),
 df = pd.DataFrame(data)
 
 scaler = MinMaxScaler(feature_range=(0, 1))
+
 scaled_data = scaler.fit_transform(df['force'].values.reshape(-1, 1))
 
 
 def create_dataset(data, time_steps=1):
+
     X, y = [], []
+    
     for i in range(len(data) - time_steps):
+    
         X.append(data[i:(i + time_steps), 0])
+        
         y.append(data[i + time_steps, 0])
+        
     return np.array(X), np.array(y)
 
 
