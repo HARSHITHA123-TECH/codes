@@ -1,0 +1,97 @@
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler
+import pickle
+from datetime import datetime, timedelta
+
+# Step 1: Parse the dates
+from_date = datetime.strptime('2024-04-21', '%Y-%m-%d')
+to_date = datetime.strptime('2024-04-25', '%Y-%m-%d')
+
+# Step 2: Generate the date range
+date_range = [from_date + timedelta(days=x) for x in range((to_date - from_date).days + 1)]
+
+# Step 3: Create a new DataFrame from the date range
+new_dates_df = pd.DataFrame(data={"Datetime": date_range})
+
+# Step 4: Apply the transformations to new_dates_df
+new_dates_df["Month"] = pd.to_datetime(new_dates_df["Datetime"]).dt.month
+new_dates_df["Year"] = pd.to_datetime(new_dates_df["Datetime"]).dt.year
+new_dates_df["Date"] = pd.to_datetime(new_dates_df["Datetime"]).dt.date
+new_dates_df["Time"] = pd.to_datetime(new_dates_df["Datetime"]).dt.time
+new_dates_df["Week"] = pd.to_datetime(new_dates_df["Datetime"]).dt.isocalendar().week
+new_dates_df["Day"] = pd.to_datetime(new_dates_df["Datetime"]).dt.day_name()
+
+# Step 5: Set 'Datetime' as index and ensure it's datetime type
+new_dates_df = new_dates_df.set_index("Datetime")
+new_dates_df.index = pd.to_datetime(new_dates_df.index)
+
+# Load the dataset and preprocess
+df = pd.read_csv("AEP_hourly.csv")
+df['Datetime'] = pd.to_datetime(df['Datetime'])
+df.set_index("Datetime", inplace=True)
+
+# Resample the dataset to daily means
+NewDataSet = df.resample('D').mean()
+
+# Extract the last 100 days as TestData
+TestData = NewDataSet.tail(100)
+
+# Step 6: Append the transformed new_dates_df to TestData with NaN for AEP_MW
+new_dates_df["AEP_MW"] = np.nan  # Add a placeholder column for 'AEP_MW'
+TestData = pd.concat([TestData, new_dates_df], ignore_index=False)
+
+# Prepare the data for prediction
+Df_Total = pd.concat((NewDataSet[["AEP_MW"]], TestData[["AEP_MW"]]), axis=0)
+inputs = Df_Total[len(Df_Total) - len(TestData) - 60:].values
+
+# Normalize the dataset
+sc = MinMaxScaler(feature_range=(0, 1))
+inputs = inputs.reshape(-1, 1)
+inputs = sc.fit_transform(inputs)
+
+# Prepare the test data for the model
+X_test = []
+for i in range(60, len(inputs)):
+    X_test.append(inputs[i-60:i])
+
+# Convert into Numpy Array
+X_test = np.array(X_test)
+
+# Reshape before passing to the network
+X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+
+# Load the trained model
+with open(r'C:\Pickle\model.pkl', 'rb') as f:
+    picklable_model = pickle.load(f)
+
+# Predict
+predicted_stock_price = picklable_model.predict(X_test)
+
+# Inverse transform to get values
+predicted_stock_price = sc.inverse_transform(predicted_stock_price)
+
+# Prepare the final DataFrame with results
+True_MegaWatt = TestData["AEP_MW"].to_list()
+dates = TestData.index.to_list()
+
+# Initialize Predicted_MegaWatt with NaN values
+Predicted_MegaWatt = [np.nan] * len(True_MegaWatt)
+
+# Fill the predictions for all dates in TestData
+for i in range(len(TestData)):
+    Predicted_MegaWatt[i] = predicted_stock_price[i][0]
+
+Machine_Df = pd.DataFrame(data={
+    "Date": dates,
+    "TrueMegaWatt": True_MegaWatt,
+    "PredictedMegaWatt": Predicted_MegaWatt
+})
+
+# Print the final DataFrame with predictions
+print("Final Machine_Df with predictions:")
+print(Machine_Df)
+
+# Optionally, save the results to a CSV file
+Machine_Df.to_csv("Predicted_MegaWatt.csv", index=False)
