@@ -1,0 +1,99 @@
+df = pd.read_csv("AEP_hourly.csv")
+df['time_stamp'] = pd.to_datetime(df['time_stamp'])
+dataset = df.set_index("time_stamp")
+# Extract all Data Like Year MOnth Day Time etc
+dataset = df
+dataset["Month"] = pd.to_datetime(df["time_stamp"]).dt.month
+dataset["Year"] = pd.to_datetime(df["time_stamp"]).dt.year
+dataset["Date"] = pd.to_datetime(df["time_stamp"]).dt.date
+dataset["Time"] = pd.to_datetime(df["time_stamp"]).dt.time
+dataset["Week"] = pd.to_datetime(df["time_stamp"]).dt.isocalendar().week
+dataset["Day"] = pd.to_datetime(df["time_stamp"]).dt.day_name()
+dataset = df.set_index("time_stamp")
+dataset.index = pd.to_datetime(dataset.index)
+dataset.head(1)
+TestData = NewDataSet.tail(100)
+
+Training_Set = NewDataSet.iloc[:,0:1]
+
+Training_Set = Training_Set[:-60]
+Training_Set = NewDataSet.iloc[:, 0:1]
+sc = MinMaxScaler(feature_range=(0, 1))
+Train = sc.fit_transform(Training_Set)
+X_Train = []
+Y_Train = []
+
+# Range should be fromm 60 Values to END 
+for i in range(60, Train.shape[0]):
+    
+    # X_Train 0-59 
+    X_Train.append(Train[i-60:i])
+    
+    # Y Would be 60 th Value based on past 60 Values 
+    Y_Train.append(Train[i])
+
+# Convert into Numpy Array
+X_Train = np.array(X_Train)
+Y_Train = np.array(Y_Train)
+
+print(X_Train.shape)
+print(Y_Train.shape)
+class PicklableModel:
+    def __init__(self, model):
+        self.model = model
+
+    def __getstate__(self):
+        return self.model.to_json()
+
+    def __setstate__(self, state):
+        self.model = tf.keras.models.model_from_json(state)
+
+    def predict(self, input_data):
+        return self.model.predict(input_data)
+
+def train():
+    X_Train = []
+    Y_Train = []
+    timesteps = 60  # Example timestep for sequence data
+    
+    for i in range(timesteps, Train.shape[0]):
+        X_Train.append(Train[i-timesteps:i, 0])
+        Y_Train.append(Train[i, 0])
+
+    X_Train = np.array(X_Train)
+    Y_Train = np.array(Y_Train)
+    X_Train = np.reshape(X_Train, (X_Train.shape[0], X_Train.shape[1], 1))  # reshape for LSTM
+
+    def build_lstm_model(input_shape):
+        model = tf.keras.models.Sequential()
+        model.add(tf.keras.layers.LSTM(units=50, return_sequences=True, input_shape=input_shape))
+        model.add(tf.keras.layers.Dropout(0.3))
+        model.add(tf.keras.layers.LSTM(units=50, return_sequences=True))
+        model.add(tf.keras.layers.Dropout(0.3))
+        model.add(tf.keras.layers.LSTM(units=50, return_sequences=True))
+        model.add(tf.keras.layers.Dropout(0.3))
+        model.add(tf.keras.layers.LSTM(units=50))
+        model.add(tf.keras.layers.Dropout(0.3))
+        model.add(tf.keras.layers.Dense(units=1))
+        model.compile(optimizer='adam', loss='mean_squared_error')
+        return model
+
+    model = build_lstm_model((X_Train.shape[1], 1))
+    model.fit(X_Train, Y_Train, epochs=12, batch_size=32)
+    picklable_model = PicklableModel(model)
+
+    with open(r'C:\Pickle\model.pkl', 'wb') as to_file:
+        pickle.dump(picklable_model, to_file)
+
+    with open(r'C:\Pickle\model.pkl', 'rb') as f:
+        picklable_model = pickle.load(f)
+
+# schedule.every(2).minutes.do(train)
+
+# try:
+#     while True:
+#         schedule.run_pending()
+#         time.sleep(1)
+# except KeyboardInterrupt:
+#     print("Training stopped.")
+train()
