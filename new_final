@@ -97,3 +97,40 @@ def train():
 # except KeyboardInterrupt:
 #     print("Training stopped.")
 train()
+
+
+
+---------------
+inputs = Df_Total[len(Df_Total) - len(TestData) - 60:].values
+print(inputs)
+# We need to Reshape
+inputs = inputs.reshape(-1,1)
+
+# Normalize the Dataset
+inputs = sc.transform(inputs)
+
+X_test = []
+for i in range(60, 160):
+    X_test.append(inputs[i-60:i])
+    
+# Convert into Numpy Array
+X_test = np.array(X_test)
+
+# Reshape before Passing to Network
+X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+
+# Pass to Model 
+predicted_stock_price =picklable_model.predict(X_test)
+
+# Do inverse Transformation to get Values 
+predicted_stock_price = sc.inverse_transform(predicted_stock_price)
+print(predicted_stock_price)
+True_force = TestData["result"].to_list()
+Predicted_Force  = predicted_stock_price
+dates = TestData.index.to_list()
+# Prepare the DataFrame
+Machine_Df = pd.DataFrame(data={
+    "Date": dates,
+    "TrueMegaWatt": True_force,
+    "PredictedMegaWatt":[x[0] for x in Predicted_Force]
+})
